@@ -1,0 +1,139 @@
+/*
+ * OdometryCorrection.java
+ */
+package ca.mcgill.ecse211.odometer;
+
+import lejos.hardware.lcd.LCD;
+import ca.mcgill.ecse211.lab2.Lab2;
+import lejos.hardware.Sound;
+
+/**
+ * 
+ * @author Kamal Malik and Julianna Tchebatereva
+ *
+ */
+public class OdometryCorrection implements Runnable {
+  private static final long CORRECTION_PERIOD = 25;   
+  private Odometer odometer;
+  	//Constants & variables 
+    private double adjustY;
+  	private double adjustX;
+    double previousSample;
+    double[] previousResult = new double [3];
+	double testingColor;
+	int linesPassed;
+	int trackingY;
+	int trackingX;
+	private float[] colorSensorData;
+	private static final double SQUARE_SIZE = 30.48;
+	private float myColor[];
+	
+  /**
+   * This is the default class constructor. An existing instance of the odometer is used. This is to
+   * ensure thread safety.
+   * 
+   * @throws OdometerExceptions
+   */
+  public OdometryCorrection() throws OdometerExceptions {
+
+    this.odometer = Odometer.getOdometer();  
+    //Data & Variables
+  	adjustY = 0;
+  	adjustX = 0;
+  	myColor = new float[Lab2.SAMPLE_COLOR.sampleSize()];
+  	this.colorSensorData = myColor;
+  	trackingY=0;  
+  	trackingX=0;
+  	linesPassed = 0;
+  	previousSample = 0;
+  	previousResult[0] = 0;
+  	previousResult[1] = 0;
+
+  }
+
+  /**
+   * Here is where the odometer correction code should be run.
+   * 
+   * @throws OdometerExceptions
+   */
+  // run method (required for Thread)
+  public void run() {
+    long correctionStart, correctionEnd;
+  	testingColor = colorSensorData[0];
+    Lab2.SAMPLE_COLOR.fetchSample(myColor, 0);
+
+    while (true) {
+      correctionStart = System.currentTimeMillis();
+
+      // TODO Trigger correction (When do I have information to correct?)
+      // TODO Calculate new (accurate) robot position
+      // TODO Update odometer with new calculated (and more accurate) vales
+ 
+      //Data storage
+ 	  testingColor = colorSensorData[0];	
+      Lab2.SAMPLE_COLOR.fetchSample(myColor, 0);
+
+   	  double[] result = odometer.getXYT();
+   	  double theta = result[2];
+
+   	  //Line detection intensity control
+   	  if(previousSample > 0.3 && (testingColor) < 0.3) {
+
+   			 
+   		if(result != null) {
+
+   		  //Correction of X and Y using previous reference points
+   		  if(linesPassed < 12) { 
+   			linesPassed++;
+			Sound.beep();
+
+			//"If" deals with the Y-axis movement and "else" deals with X-axis movement
+			if(((linesPassed < 10)&&(linesPassed > 6)) || (linesPassed < 4)) {
+			  trackingY++;
+			  //Adjustment for origin
+			  if(linesPassed == 9 || linesPassed == 1) { 
+			    adjustY = Math.round(Math.cos((Math.PI /180)*theta)*SQUARE_SIZE) + previousResult[1]; //Cos in radians
+			  }
+			  else {
+			    adjustY = Math.round(Math.cos((Math.PI /180)*theta)*SQUARE_SIZE*0); //Cos in radians
+			  }
+			  odometer.setY(adjustY); 
+   			}
+   			else {
+   			  trackingX++;
+			  //Adjustyment for origin
+			  if(linesPassed == 12 || linesPassed == 4) {
+				adjustX = Math.round(Math.sin((Math.PI /180)*theta)*SQUARE_SIZE*0);  //Sin in radians			
+			  }
+			  else {
+			    adjustX = Math.round(Math.sin((Math.PI /180)*theta)*SQUARE_SIZE + previousResult[0]);     //Sin in radians
+			  }
+			  odometer.setX(adjustX+7); //offset
+			  odometer.setY(adjustY+15); //offset
+   			} 
+   		}
+   	}
+
+   			//Value adjustment for X,Y,T
+   			previousSample = testingColor;
+   			previousResult[2] = theta;
+   			previousResult[1] = adjustY;
+   			previousResult[0] = adjustX;
+   		}
+   	  
+   	previousSample = testingColor;
+
+      //odometer.setXYT(0.3, 19.23, 5.0);
+
+      // this ensure the odometry correction occurs only once every period
+      correctionEnd = System.currentTimeMillis();
+      if (correctionEnd - correctionStart < CORRECTION_PERIOD) {
+        try {
+          Thread.sleep(CORRECTION_PERIOD - (correctionEnd - correctionStart));
+        } catch (InterruptedException e) {
+          // there is nothing to be done here
+        }
+      }
+    }
+  }
+}
